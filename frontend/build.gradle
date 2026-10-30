@@ -1,0 +1,35 @@
+// Node is never installed on the host: every npm command runs in a podman container.
+def nodeImage = 'docker.io/library/node:22'
+def uid = ['id', '-u'].execute().text.trim()
+def gid = ['id', '-g'].execute().text.trim()
+
+def podmanNode = { List<String> extraArgs, String script ->
+    ['podman', 'run', '--rm', '--userns=keep-id', '-u', "${uid}:${gid}",
+     '-e', 'HOME=/tmp', '-e', 'npm_config_cache=/tmp/npm',
+     '-v', "${projectDir}:/app:Z", '-w', '/app'] + extraArgs + [nodeImage, 'sh', '-c', script]
+}
+
+tasks.register('npmInstall', Exec) {
+    inputs.files('package.json')
+    outputs.dir('node_modules')
+    commandLine podmanNode([], 'npm install')
+}
+
+tasks.register('npmBuild', Exec) {
+    dependsOn 'npmInstall'
+    inputs.dir('src')
+    inputs.dir('public')
+    inputs.files('index.html', 'package.json', 'vite.config.js')
+    outputs.dir('dist')
+    commandLine podmanNode([], 'npm run build')
+}
+
+// Vite dev server on :5173, proxying /api, /oauth2, /login to the Spring app on the host.
+tasks.register('dev', Exec) {
+    dependsOn 'npmInstall'
+    commandLine podmanNode(['--network=host'], 'npm run dev -- --host')
+}
+
+tasks.register('clean', Delete) {
+    delete 'dist', 'node_modules'
+}

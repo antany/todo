@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Todo app: usage and deployment plan</title>
+<style>
+  :root {
+    --bg: #eef2fa; --paper: #ffffff; --text: #1b1f2a; --muted: #5a6275; --line: #d5dbea;
+    --primary: #3949ab; --accent: #00acc1; --code-bg: #f3f5fb; --warn-bg: #fff6e0; --warn-line: #f0c36d;
+    --ok-bg: #e6f6ee; --ok-line: #8ed1ad; --todo-bg: #eceefb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1220; --paper: #151c30; --text: #e6e9f4; --muted: #9aa3bb; --line: #26304d;
+      --primary: #9fa8ff; --accent: #4dd0e1; --code-bg: #0f1527; --warn-bg: #2b2412; --warn-line: #7a6228;
+      --ok-bg: #12291f; --ok-line: #2f6a4c; --todo-bg: #1b2140;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 Roboto, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { background: var(--primary); color: #fff; padding: 28px 16px; }
+  @media (prefers-color-scheme: dark) { header { color: #0d1220; } }
+  header .in, main { max-width: 900px; margin: 0 auto; padding: 0 16px; }
+  header h1 { margin: 0 0 4px; font-size: 1.7rem; }
+  header p { margin: 0; opacity: .9; }
+  main { padding-top: 20px; padding-bottom: 60px; }
+  nav.toc { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 14px 18px; margin-bottom: 20px; }
+  nav.toc ol { margin: 6px 0 0; padding-left: 20px; columns: 2; column-gap: 28px; }
+  @media (max-width: 600px) { nav.toc ol { columns: 1; } }
+  section { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 6px 20px 18px; margin-bottom: 20px; }
+  h2 { color: var(--primary); margin: 18px 0 4px; font-size: 1.35rem; }
+  h3 { margin: 20px 0 4px; font-size: 1.05rem; }
+  a { color: var(--primary); }
+  code { background: var(--code-bg); border-radius: 5px; padding: 1px 5px; font: .88em ui-monospace, SFMono-Regular, Menlo, monospace; }
+  pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; overflow-x: auto; font: .85rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: .93rem; display: block; overflow-x: auto; }
+  th, td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); }
+  .note, .warn, .ok { border-radius: 10px; padding: 10px 14px; margin: 12px 0; border: 1px solid; }
+  .note { background: var(--todo-bg); border-color: var(--line); }
+  .warn { background: var(--warn-bg); border-color: var(--warn-line); }
+  .ok { background: var(--ok-bg); border-color: var(--ok-line); }
+  .tag { display: inline-block; font-size: .72rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; border-radius: 999px; padding: 1px 9px; margin-left: 6px; vertical-align: middle; }
+  .tag.done { background: var(--ok-bg); border: 1px solid var(--ok-line); }
+  .tag.soon { background: var(--warn-bg); border: 1px solid var(--warn-line); }
+  ul, ol { padding-left: 22px; }
+  li { margin: 3px 0; }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; padding-bottom: 30px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="in">
+    <h1>Todo app: usage and deployment plan</h1>
+    <p>Offline-first todo lists with Google sign-in, cloud sync and (soon) sharing. React + Material UI, Spring Boot 4, Postgres.</p>
+  </div>
+</header>
+<main>
+
+<nav class="toc" aria-label="Contents">
+  <strong>Contents</strong>
+  <ol>
+    <li><a href="#status">What works today</a></li>
+    <li><a href="#using">Using the app</a></li>
+    <li><a href="#sharing">Sharing a list</a></li>
+    <li><a href="#offline">Offline, sync and accounts</a></li>
+    <li><a href="#local">Running it locally</a></li>
+    <li><a href="#deploy-overview">Deployment: overview</a></li>
+    <li><a href="#google">Google sign-in setup</a></li>
+    <li><a href="#config">Configuration reference</a></li>
+    <li><a href="#build">Build and package</a></li>
+    <li><a href="#run">Run in production</a></li>
+    <li><a href="#proxy">HTTPS and reverse proxy</a></li>
+    <li><a href="#ops">Backups, upgrades, rollback</a></li>
+    <li><a href="#security">Security and privacy notes</a></li>
+    <li><a href="#checklist">Go-live checklist</a></li>
+    <li><a href="#limits">Known limitations and roadmap</a></li>
+    <li><a href="#trouble">Troubleshooting</a></li>
+  </ol>
+</nav>
+
+<section id="status">
+  <h2>1. What works today</h2>
+  <table>
+    <tr><th>Feature</th><th>State</th></tr>
+    <tr><td>Several todo lists per person, colours, rename, delete with undo</td><td><span class="tag done">built</span></td></tr>
+    <tr><td>Tasks: title, notes, priority, due date, follow-up date, reminder time, tags, subtasks, repeat</td><td><span class="tag done">built</span></td></tr>
+    <tr><td>Reorder by drag, sort by due date or priority, search, tag filter, completed section</td><td><span class="tag done">built</span></td></tr>
+    <tr><td>Follow-up tracking: follow-up date, "Log follow-up" notes, per-task activity history</td><td><span class="tag done">built</span></td></tr>
+    <tr><td>Views: All tasks (landing page), Lists, Today, Upcoming, Follow-up</td><td><span class="tag done">built</span></td></tr>
+    <tr><td>Offline mode with data in the browser (<code>localStorage</code>), no account needed</td><td><span class="tag done">built</span></td></tr>
+    <tr><td>Accounts: username + password (no email or personal info), or Google sign-in</td><td><span class="tag done">built</span> (password flow tested end to end; real Google round trip not yet tested)</td></tr>
+    <tr><td>Continuous sync with Postgres, merging local and cloud data</td><td><span class="tag done">built</span></td></tr>
+    <tr><td>Installable PWA (home-screen app), mobile layout</td><td><span class="tag done">built</span>, icons are placeholders</td></tr>
+    <tr><td>Sharing lists with view/edit roles (invite by Google email or username, must accept)</td><td><span class="tag done">built</span></td></tr>
+    <tr><td>Reminder notifications that actually fire</td><td><span class="tag soon">planned</span></td></tr>
+    <tr><td>Container image, pod file, backup script, README</td><td><span class="tag soon">planned</span></td></tr>
+  </table>
+</section>
+
+<section id="using">
+  <h2>2. Using the app</h2>
+
+  <h3>Getting around</h3>
+  <p>On a phone, use the bottom bar; on a larger screen, the side menu. <strong>All tasks</strong> is the first item and the page the app opens on.</p>
+  <ul>
+    <li><strong>All tasks</strong>: every task from every list, grouped by list. Tap list chips to narrow to one or more lists, search across everything, and use the toggle to show completed tasks. The sort button orders by manual order, due date or priority.</li>
+    <li><strong>Lists</strong>: your lists. Tap <em>+</em> to create one (name and colour); the pencil edits a list.</li>
+    <li><strong>Today</strong>: open tasks due today, with overdue ones on top.</li>
+    <li><strong>Upcoming</strong>: tasks due later, grouped by day.</li>
+    <li><strong>Follow-up</strong>: tasks to chase. "Due for follow-up", "Scheduled", and "Waiting" tasks that have no date.</li>
+    <li><strong>Settings</strong>: sync status, backup export/import, and clearing this device.</li>
+  </ul>
+
+  <h3>Adding and completing tasks</h3>
+  <ul>
+    <li>Open a list, type in <em>Add a task</em> and press Enter. The quick-add box takes only a title; set dates in the task details.</li>
+    <li>Tick the checkbox to complete a task. A bar at the bottom offers <strong>Undo</strong> for a few seconds.</li>
+    <li>Drag the handle on the right of a task to reorder (works when the sort is "Manual order" and no search or tag filter is on).</li>
+  </ul>
+
+  <h3>Task details: due date, follow-up and more</h3>
+  <p>Tap a task's <strong>title</strong> (not the checkbox). A panel slides up with:</p>
+  <table>
+    <tr><th>Field</th><th>What it does</th></tr>
+    <tr><td>Notes</td><td>Free text.</td></tr>
+    <tr><td>List</td><td>Move the task to another list.</td></tr>
+    <tr><td>Priority</td><td>None, Low, Medium, High. Shown as a coloured flag; can be used as the sort order.</td></tr>
+    <tr><td>Status</td><td>To do, In progress, Waiting, Done. "Waiting" tasks appear in the Follow-up view.</td></tr>
+    <tr><td>Due</td><td>Date and time. Overdue tasks are highlighted in red. Chips set Today, Tomorrow or Next week in one tap.</td></tr>
+    <tr><td>Follow up</td><td>The date you want to chase this task. Appears in the Follow-up view and as a highlighted chip when it is due.</td></tr>
+    <tr><td>Remind me</td><td>A reminder time. Stored and synced; notifications are not wired up yet (see limitations).</td></tr>
+    <tr><td>Repeat</td><td>Daily, weekly, monthly or yearly. Needs a due date. Completing the task creates the next one; Undo removes it again.</td></tr>
+    <tr><td>Tags</td><td>Type a tag and press Enter. Tags can be filtered on in a list and searched on All tasks.</td></tr>
+    <tr><td>Subtasks</td><td>A small checklist; the task row shows progress such as 1/3.</td></tr>
+    <tr><td>Follow-up &amp; activity</td><td>Write a note and press <em>Log follow-up</em> to record that you chased it. The history lists every change (created, edited, status changes, follow-ups). Logging keeps a future follow-up date and clears one that has already passed, so set the next date after logging.</td></tr>
+  </table>
+  <p>Changes save immediately; close the panel with the ✕.</p>
+
+  <h3>Creating an account and signing in</h3>
+  <p>Signing in is optional. Use the <strong>Sign in</strong> button in the top bar:</p>
+  <ul>
+    <li><strong>Create account:</strong> choose a username (3 to 30 characters: letters, digits, dot, dash, underscore; not case-sensitive) and a password of at least 8 characters, and repeat it. Nothing else is asked or stored: no email, name or phone number.</li>
+    <li><strong>Sign in:</strong> the same username and password on any device. Too many wrong attempts lock sign-in for that username for about 15 minutes.</li>
+    <li><strong>Continue with Google:</strong> shown only when the site owner has set up Google sign-in. A Google account and a username account are separate accounts; they cannot be merged.</li>
+    <li><strong>Change password:</strong> Settings &rarr; Change password (asks for the current one).</li>
+  </ul>
+  <div class="warn"><strong>There is no password reset.</strong> Because no email is kept, a forgotten password cannot be recovered by the app. Use a password manager or write it down. (The server operator can set a new password hash directly in the database, see section 11.)</div>
+
+  <h3>Install on your phone or computer</h3>
+  <p>Open the site over HTTPS (or <code>localhost</code>) and choose <em>Add to Home screen</em> / <em>Install app</em> in the browser menu. The app then opens full-screen and works offline.</p>
+</section>
+
+<section id="sharing">
+  <h2>Sharing a list</h2>
+  <p>Sign in, open a list and tap the <strong>person+</strong> icon. Type a Google email or, for a username account, the username (usernames never contain an @), pick <em>Can edit</em> or <em>Can view</em> and tap Invite. Nothing is visible to the other person until they accept: they see an envelope icon with a count in the top bar, open it and choose Accept or Decline. Accepted lists appear in their Lists and All tasks pages marked as shared.</p>
+  <ul>
+    <li><strong>Can view:</strong> read everything, change nothing (the add box, checkboxes and task fields are disabled).</li>
+    <li><strong>Can edit:</strong> add, edit, reorder, complete and delete tasks. Only the owner changes the list itself.</li>
+    <li>The owner can change a role or remove someone at any time; a member can choose <em>Leave list</em>.</li>
+    <li>Inviting an email that has never signed in leaves the invitation waiting for them; it appears after their first Google sign-in.</li>
+  </ul>
+</section>
+
+<section id="offline">
+  <h2>3. Offline, sync and accounts</h2>
+  <ul>
+    <li><strong>Not signed in:</strong> everything is stored in this browser only. Nothing leaves the device. Clearing site data deletes it, so use <em>Settings &rarr; Export JSON</em> as a backup.</li>
+    <li><strong>Signed in</strong> (username and password, or Google): your lists sync with your account about two seconds after a change, when the connection returns, when you come back to the tab, and every minute. The top bar chip shows <em>Synced</em>, <em>Syncing</em>, <em>Offline</em> or <em>Problem</em>; tap it to sync now.</li>
+    <li><strong>Offline while signed in:</strong> keep working. Changes are saved on the device and uploaded when the connection returns.</li>
+    <li><strong>Existing local lists when you sign in</strong> (either method) are kept and merged with your account, not discarded. A fresh device does not get a duplicate starter list.</li>
+    <li><strong>Conflicts:</strong> if the same task is edited on two devices, the most recent edit wins for that whole task; deletions win over older edits. Edits to different tasks never conflict.</li>
+    <li><strong>A different account on the same device:</strong> the app asks whether to add this device's lists to the new account or start clean. Starting clean only empties this device.</li>
+    <li><strong>Signing out</strong> keeps the lists on the device.</li>
+  </ul>
+</section>
+
+<section id="local">
+  <h2>4. Running it locally (development)</h2>
+  <p>Requirements: Java 25, <a href="https://podman.io">podman</a>. Node is not needed on the host; npm runs in a container through Gradle.</p>
+<pre><code># 1. database (Postgres on host port 5433, user/password/db all "todo")
+podman kube play podman/postgres.yaml
+
+# 2. build the React app, then start the server (serves everything)
+./gradlew :backend:bootRun
+#    open http://localhost:8080/todo/
+
+# optional: hot-reloading UI on :5173 (proxies the API to :8080)
+./gradlew :frontend:dev
+
+# tests (need the rootless podman socket)
+systemctl --user start podman.socket
+./gradlew :backend:test</code></pre>
+  <p>Without Google credentials the app is fully usable signed out; the "Continue with Google" button redirects to Google but cannot complete. To try real sign-in locally, create an OAuth client (section 6) with the redirect URI <code>http://localhost:8080/todo/login/oauth2/code/google</code> and start the app with <code>GOOGLE_CLIENT_ID</code> and <code>GOOGLE_CLIENT_SECRET</code> set.</p>
+</section>
+
+<section id="deploy-overview">
+  <h2>5. Deployment: overview</h2>
+  <p>The whole app is one executable jar: Spring Boot serves the API and the built React bundle from the same origin. It needs one Postgres database and an HTTPS front door.</p>
+<pre><code>phone / laptop  --HTTPS-->  reverse proxy or tunnel  -->  app (jar, :8080, path /todo)  -->  Postgres 17
+                            (Caddy, nginx, Cloudflare Tunnel)</code></pre>
+  <p>Recommended target, matching the existing expense tracker: one rootless <strong>podman pod</strong> on your own server holding three containers (app, Postgres, Cloudflare Tunnel), nothing published on the host except through the tunnel. A plain systemd service running the jar next to an existing Postgres works just as well.</p>
+  <div class="note">Files for the container route (<code>podman/Containerfile</code>, <code>podman/todo-pod.yaml</code>, <code>podman/secrets.example.yaml</code>, <code>scripts/backup-db.sh</code>) are <strong>not in the repo yet</strong>; they are step 7 of the plan. The snippets below are the intended content, modelled on the expense tracker's.</div>
+  <p>Only one app instance is needed for personal or family use. Sync requests are serialised by a database lock, which also makes it safe if you ever run two instances against one database.</p>
+</section>
+
+<section id="google">
+  <h2>6. Google sign-in setup (optional)</h2>
+  <p>Username and password accounts work with no setup at all. Google sign-in is an extra: until <code>GOOGLE_CLIENT_ID</code> is set, the login page simply hides the Google button. To enable it:</p>
+  <ol>
+    <li>In the <a href="https://console.cloud.google.com/apis/credentials">Google Cloud console</a>, create a project and configure the OAuth consent screen (External; add yourself and family as test users, or publish).</li>
+    <li>Create credentials &rarr; <em>OAuth client ID</em> &rarr; type <em>Web application</em>.</li>
+    <li>Authorised redirect URI: <code>https://YOUR-HOST/todo/login/oauth2/code/google</code> (exactly; add the <code>http://localhost:8080/...</code> one too for local testing).</li>
+    <li>Copy the client ID and secret into the secrets file (below). Never commit them.</li>
+    <li>Set <code>APP_ALLOWED_EMAILS</code> to a comma-separated list of the Google emails allowed to create an account. Leave it empty to allow anyone with a Google account. People you invite to a list will always be allowed in once sharing exists. (This list does not apply to username accounts; use <code>APP_PASSWORD_SIGNUP</code> for those.)</li>
+  </ol>
+  <div class="warn">The real Google round trip has not been exercised yet. Test it first on localhost, then on the public URL, before inviting anyone.</div>
+</section>
+
+<section id="config">
+  <h2>7. Configuration reference</h2>
+  <p>All settings are environment variables on the app container (Spring maps them onto <code>application.yml</code>).</p>
+  <table>
+    <tr><th>Variable</th><th>Default</th><th>Purpose</th></tr>
+    <tr><td><code>DB_URL</code></td><td><code>jdbc:postgresql://localhost:5433/todo</code></td><td>JDBC URL. In the pod use <code>jdbc:postgresql://localhost:5432/todo</code>.</td></tr>
+    <tr><td><code>DB_USER</code> / <code>DB_PASSWORD</code></td><td><code>todo</code> / <code>todo</code></td><td>Database login. Use a strong password in production.</td></tr>
+    <tr><td><code>GOOGLE_CLIENT_ID</code> / <code>GOOGLE_CLIENT_SECRET</code></td><td><code>not-configured</code></td><td>OAuth client from section 6. Required for sign-in.</td></tr>
+    <tr><td><code>APP_ALLOWED_EMAILS</code></td><td>empty (anyone)</td><td>Who may create an account.</td></tr>
+    <tr><td><code>APP_PASSWORD_SIGNUP</code></td><td><code>true</code></td><td>Whether anyone can create a username + password account. Set <code>false</code> on a private instance after you and your family have registered (existing accounts keep working).</td></tr>
+    <tr><td><code>CONTEXT_PATH</code></td><td><code>/todo</code></td><td>URL prefix. Must match <code>base</code> in <code>frontend/vite.config.js</code> (rebuild the frontend if you change both).</td></tr>
+    <tr><td><code>SERVER_FORWARD_HEADERS_STRATEGY</code></td><td>unset</td><td>Set to <code>framework</code> behind a proxy so redirect URIs use <code>https</code> and the login lockout sees each visitor's real IP instead of the proxy's.</td></tr>
+    <tr><td><code>SERVER_SERVLET_SESSION_COOKIE_SECURE</code></td><td>unset</td><td>Set to <code>true</code> in production so the session cookie is HTTPS-only.</td></tr>
+    <tr><td><code>SERVER_PORT</code></td><td><code>8080</code></td><td>Listening port.</td></tr>
+  </table>
+  <p>The database schema is created and upgraded automatically at start-up (Flyway). The Postgres user needs rights to create tables in its database.</p>
+</section>
+
+<section id="build">
+  <h2>8. Build and package</h2>
+<pre><code>./gradlew :backend:bootJar
+# -> backend/build/libs/backend-0.1.0.jar   (React bundle included, about 32 MB)</code></pre>
+  <p>Runtime needs Java 25. To containerise (planned <code>podman/Containerfile</code>):</p>
+<pre><code>FROM docker.io/library/eclipse-temurin:25-jre
+RUN useradd --system --uid 10001 app
+COPY backend/build/libs/backend-0.1.0.jar /app/app.jar
+USER app
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]</code></pre>
+<pre><code>podman build -f podman/Containerfile -t localhost/todo-app:latest .</code></pre>
+</section>
+
+<section id="run">
+  <h2>9. Run in production</h2>
+
+  <h3>Option A: podman pod (recommended)</h3>
+  <p>Planned <code>podman/secrets.example.yaml</code> (copy to the git-ignored <code>podman/secrets.yaml</code> and fill in):</p>
+<pre><code>apiVersion: v1
+kind: Secret
+metadata:
+  name: todo-secrets
+stringData:
+  db-password: change-me
+  google-client-id: 1234-abc.apps.googleusercontent.com
+  google-client-secret: GOCSPX-change-me
+  allowed-emails: you@gmail.com,family@gmail.com
+  tunnel-token: eyJ-change-me          # only if you use a Cloudflare Tunnel</code></pre>
+  <p>Planned <code>podman/todo-pod.yaml</code>:</p>
+<pre><code>apiVersion: v1
+kind: Pod
+metadata:
+  name: todo
+spec:
+  containers:
+    - name: app
+      image: localhost/todo-app:latest
+      env:
+        - { name: DB_URL, value: "jdbc:postgresql://localhost:5432/todo" }
+        - { name: DB_USER, value: todo }
+        - { name: DB_PASSWORD, valueFrom: { secretKeyRef: { name: todo-secrets, key: db-password } } }
+        - { name: GOOGLE_CLIENT_ID, valueFrom: { secretKeyRef: { name: todo-secrets, key: google-client-id } } }
+        - { name: GOOGLE_CLIENT_SECRET, valueFrom: { secretKeyRef: { name: todo-secrets, key: google-client-secret } } }
+        - { name: APP_ALLOWED_EMAILS, valueFrom: { secretKeyRef: { name: todo-secrets, key: allowed-emails } } }
+        - { name: APP_PASSWORD_SIGNUP, value: "true" }     # set "false" to close registration
+        - { name: SERVER_FORWARD_HEADERS_STRATEGY, value: framework }
+        - { name: SERVER_SERVLET_SESSION_COOKIE_SECURE, value: "true" }
+    - name: postgres
+      image: docker.io/library/postgres:17
+      env:
+        - { name: POSTGRES_DB, value: todo }
+        - { name: POSTGRES_USER, value: todo }
+        - { name: POSTGRES_PASSWORD, valueFrom: { secretKeyRef: { name: todo-secrets, key: db-password } } }
+      volumeMounts:
+        - { name: data, mountPath: /var/lib/postgresql/data }
+    - name: tunnel                       # remove if you use another proxy
+      image: docker.io/cloudflare/cloudflared:latest
+      args: ["tunnel", "--no-autoupdate", "run"]
+      env:
+        - { name: TUNNEL_TOKEN, valueFrom: { secretKeyRef: { name: todo-secrets, key: tunnel-token } } }
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: todo-db-data</code></pre>
+<pre><code>podman kube play podman/secrets.yaml podman/todo-pod.yaml
+podman logs todo-app          # look for "Started TodoApplication" and Flyway migrating
+# stop / remove:  podman kube down podman/todo-pod.yaml</code></pre>
+  <p>To start the pod at boot with rootless podman, generate a systemd unit (<code>podman generate systemd</code> or Quadlet) and run <code>loginctl enable-linger $USER</code>.</p>
+
+  <h3>Option B: plain jar + systemd</h3>
+<pre><code>[Service]
+User=todo
+Environment=DB_URL=jdbc:postgresql://localhost:5432/todo DB_USER=todo
+EnvironmentFile=/etc/todo-app.env      # DB_PASSWORD, GOOGLE_*, APP_ALLOWED_EMAILS (chmod 600)
+Environment=SERVER_FORWARD_HEADERS_STRATEGY=framework SERVER_SERVLET_SESSION_COOKIE_SECURE=true
+ExecStart=/usr/bin/java -jar /opt/todo-app/app.jar
+Restart=on-failure</code></pre>
+</section>
+
+<section id="proxy">
+  <h2>10. HTTPS and reverse proxy</h2>
+  <p>HTTPS is mandatory in practice: Google requires it for redirects, and phones only offer to install the PWA on HTTPS.</p>
+  <ul>
+    <li><strong>Cloudflare Tunnel:</strong> add a public hostname pointing at <code>http://localhost:8080</code> (inside the pod). Requests for <code>/todo/...</code> pass through unchanged.</li>
+    <li><strong>Caddy / nginx:</strong> proxy <code>https://YOUR-HOST/todo/</code> to <code>http://127.0.0.1:8080/todo/</code> and send <code>X-Forwarded-Proto</code> and <code>X-Forwarded-Host</code>. Caddy example: <code>reverse_proxy /todo/* 127.0.0.1:8080</code>.</li>
+    <li>Do not strip or rewrite the <code>/todo</code> prefix; the app expects it.</li>
+  </ul>
+</section>
+
+<section id="ops">
+  <h2>11. Backups, upgrades, rollback</h2>
+
+  <h3>Backups</h3>
+  <p>Two layers: each person can export JSON from <em>Settings</em>, and you back up the database. A nightly dump from the running pod (planned <code>scripts/backup-db.sh</code>, same idea as the expense tracker's):</p>
+<pre><code>podman exec todo-postgres pg_dump -U todo todo | gzip &gt; ~/backups/todo/todo_$(date +%F).sql.gz
+# keep the newest ~14, run from cron or a systemd timer, and copy off the machine
+# restore into an empty database:
+gunzip -c todo_2026-11-01.sql.gz | podman exec -i todo-postgres psql -U todo todo</code></pre>
+
+  <h3>Upgrading</h3>
+  <ol>
+    <li>Take a database backup.</li>
+    <li><code>git pull</code>, then <code>./gradlew :backend:bootJar</code> and rebuild the image.</li>
+    <li>Restart the pod/service. Flyway applies any new migrations automatically at start-up.</li>
+    <li>Open the app, check the sync chip shows <em>Synced</em>. Installed PWAs pick up the new version on their next load.</li>
+  </ol>
+
+  <h3>Rollback</h3>
+  <p>Flyway migrations here are forward-only. To roll back after a schema change, redeploy the previous image <em>and</em> restore the pre-upgrade backup. Never edit a migration that has already been applied; add a new one.</p>
+</section>
+
+<section id="security">
+  <h2>12. Security and privacy notes</h2>
+  <ul>
+    <li>Two kinds of account. <strong>Username accounts</strong> store only the username and a bcrypt hash of the password (never the password itself); no email or personal data. <strong>Google accounts</strong> store the Google email, display name and Google account id, never a password.</li>
+    <li>Password guessing is slowed down: 5 wrong attempts per username and 30 per IP address lock sign-in for about 15 minutes, and registrations are limited per IP. The counters live in memory and reset when the server restarts. Error messages do not reveal whether a username exists.</li>
+    <li>There is deliberately no password reset (no email on file). If someone forgets their password, the operator can store a new bcrypt hash for that username in the <code>app_user</code> table (prefixed <code>{bcrypt}</code>), and should tell the person to change it in Settings straight away. Prefer testing this on a throwaway account first.</li>
+    <li>Close open registration with <code>APP_PASSWORD_SIGNUP=false</code> once your people have accounts.</li>
+    <li>The session cookie is HttpOnly and, with the setting above, HTTPS-only. State-changing requests require a CSRF token (handled by the app).</li>
+    <li>Every server request to read or write a list passes a single permission check: only the owner and accepted members can see it; a pending invitation grants nothing; viewers cannot write.</li>
+    <li>Use <code>APP_ALLOWED_EMAILS</code> to keep a private instance private.</li>
+    <li>Keep <code>podman/secrets.yaml</code> and any env file out of git (already in <code>.gitignore</code>) and readable only by the service user.</li>
+    <li>Browser-stored data (signed out, or cached while signed in) is plain text in <code>localStorage</code>: anyone using the same browser profile can read it.</li>
+    <li>Never ship a development login shortcut; the project's browser tests use a temporary one that must not be committed.</li>
+  </ul>
+</section>
+
+<section id="checklist">
+  <h2>13. Go-live checklist</h2>
+  <ol>
+    <li>Domain and HTTPS in place; <code>https://YOUR-HOST/todo/</code> loads the app.</li>
+    <li>Google OAuth client created with the exact redirect URI; consent screen configured.</li>
+    <li>Secrets filled in; strong DB password; <code>APP_ALLOWED_EMAILS</code> set.</li>
+    <li>Pod/service started; logs show Flyway migrating and "Started TodoApplication".</li>
+    <li>Sign in with your Google account; chip shows <em>Synced</em>.</li>
+    <li>Create a task on one device, see it on another; go offline, edit, reconnect, confirm it syncs.</li>
+    <li>Install the PWA on a phone.</li>
+    <li>Backup job scheduled and a restore tested once.</li>
+    <li>Auto-start at boot verified (reboot test).</li>
+  </ol>
+</section>
+
+<section id="limits">
+  <h2>14. Known limitations and roadmap</h2>
+  <ul>
+    <li><strong>Sharing:</strong> only the owner can rename, recolour or delete a shared list and manage its members. A list holds at most 50 members. If someone is removed, the list vanishes from their devices on their next sync, including any edits they had not synced yet.</li>
+    <li><strong>Reminders do not notify yet</strong> (step 6): reminder times are saved and synced. True background push is out of scope; the plan is in-app alerts plus opt-in browser notifications while the app is open.</li>
+    <li><strong>Merge is per task</strong>, not per field: two devices editing different fields of the same task while offline will keep only the later edit.</li>
+    <li><strong>Google sign-in untested end to end</strong> until an OAuth client exists. Username sign-in is tested end to end.</li>
+    <li><strong>No password reset or account recovery</strong> for username accounts, by design. Google and username accounts cannot be linked.</li>
+    <li>PWA icons are placeholders copied from another project; replace before sharing widely.</li>
+    <li>The unit of "task group" is a list; there are no nested lists or folders.</li>
+  </ul>
+</section>
+
+<section id="trouble">
+  <h2>15. Troubleshooting</h2>
+  <table>
+    <tr><th>Symptom</th><th>Likely cause and fix</th></tr>
+    <tr><td>Google says <em>redirect_uri_mismatch</em></td><td>The URI in the Google console must equal <code>https://HOST/todo/login/oauth2/code/google</code>. Behind a proxy, set <code>SERVER_FORWARD_HEADERS_STRATEGY=framework</code> so the app builds an https URI.</td></tr>
+    <tr><td>"Too many attempts" when signing in</td><td>The username or IP hit the failure limit. Wait about 15 minutes, or restart the server to clear the in-memory counters. Behind a proxy, make sure <code>SERVER_FORWARD_HEADERS_STRATEGY=framework</code> is set, otherwise all visitors look like one IP.</td></tr>
+    <tr><td>"Creating accounts is turned off"</td><td><code>APP_PASSWORD_SIGNUP</code> is <code>false</code>.</td></tr>
+    <tr><td>Forgot the password of a username account</td><td>It cannot be reset by the app. See section 12 for the operator procedure, or create a new account.</td></tr>
+    <tr><td>Login page shows "not allowed to sign up"</td><td>The email is not in <code>APP_ALLOWED_EMAILS</code>. Add it or leave the variable empty.</td></tr>
+    <tr><td>Refreshing a page gives 404</td><td>A new frontend route was added without adding it to <code>web/SpaController</code>.</td></tr>
+    <tr><td>Sign-in works but the app keeps asking to sign in again</td><td>Cookie is HTTPS-only but the site is on plain HTTP, or the proxy is dropping cookies.</td></tr>
+    <tr><td>Chip shows <em>Problem</em></td><td>Tap it to retry; check the app logs. A 401 means the session ended and you will be asked to sign in again; your local data is kept.</td></tr>
+    <tr><td>Tests fail to start a database</td><td>Run <code>systemctl --user start podman.socket</code>.</td></tr>
+    <tr><td>Changes on one device never appear on another</td><td>Both must be signed in to the same Google account; tap the chip to sync now.</td></tr>
+    <tr><td>App will not start: database errors</td><td>Check <code>DB_URL</code>/credentials and that Postgres is up; Flyway needs permission to create tables.</td></tr>
+  </table>
+</section>
+
+</main>
+<footer>Generated for the todo-app repository. Source of truth for developers: <code>CLAUDE.md</code>.</footer>
+</body>
+</html>

@@ -1,0 +1,28 @@
+spring:
+  web:
+    error:
+      # Boot 4 moved this from server.error.*; the API's error messages (e.g. "Wrong username or password") need it.
+      include-message: always
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID:not-configured}
+            client-secret: ${GOOGLE_CLIENT_SECRET:not-configured}
+            scope: openid,profile,email
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/todo}
+    username: ${DB_USER:todo}
+    password: ${DB_PASSWORD:todo}
+app:
+  # Username + password accounts (no email, no password reset). Set false to allow only Google accounts and
+  # existing password accounts.
+  password-signup: ${APP_PASSWORD_SIGNUP:true}
+  # Comma-separated Google emails allowed to create an account. Empty = anyone with a Google account.
+  # People who were invited to a list can always sign in.
+  allowed-emails: ${APP_ALLOWED_EMAILS:}
+server:
+  # Must match `base` in frontend/vite.config.js. A reverse proxy forwards /todo/** unchanged.
+  servlet:
+    context-path: ${CONTEXT_PATH:/todo}

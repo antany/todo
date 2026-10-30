@@ -1,0 +1,52 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '4.1.2'
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+configurations {
+    mockitoAgent
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-flyway'
+    implementation 'org.flywaydb:flyway-database-postgresql'
+    runtimeOnly 'org.postgresql:postgresql'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
+    testImplementation 'org.testcontainers:testcontainers-postgresql'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    mockitoAgent('org.mockito:mockito-core') { transitive = false }
+}
+
+// Bundle the compiled React app into the jar's static resources.
+processResources {
+    dependsOn ':frontend:npmBuild'
+    from(project(':frontend').layout.projectDirectory.dir('dist')) {
+        into 'static'
+    }
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+    // Load Mockito as a real agent: self-attaching is deprecated and warns on newer JDKs
+    jvmArgs '-Duser.timezone=UTC', '-Xshare:off', "-javaagent:${configurations.mockitoAgent.asPath}"
+    // Testcontainers against rootless podman
+    environment 'DOCKER_HOST', "unix://${System.getenv('XDG_RUNTIME_DIR')}/podman/podman.sock"
+    environment 'TESTCONTAINERS_RYUK_DISABLED', 'true'
+}
