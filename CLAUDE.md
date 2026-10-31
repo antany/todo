@@ -6,9 +6,7 @@ Todo PWA: several todo lists per person, offline-first (localStorage when signed
 
 ## Status
 
-Built plan steps 1-6 (sharing, reminders), an "All tasks" landing page and the theme. Remaining:
-- **Step 7:** PWA icons (currently copied from expense-tracker), `Containerfile` + pod yaml + backup script, README.
-Nothing is committed to git yet (repo is initialised on `main`).
+All 7 plan steps are built (sharing, reminders, deploy files). Not done / untested: the real Google OAuth round trip (no OAuth client yet), the Cloudflare tunnel container, installed-phone notifications, push notifications for a closed app (out of scope).
 
 ## Commands
 
@@ -21,6 +19,7 @@ podman kube play podman/postgres.yaml     # local Postgres (todo/todo/todo) on h
 ./gradlew :backend:bootJar                # backend/build/libs/backend-0.1.0.jar with the React bundle under static/
 ./gradlew :backend:processResources       # fastest way to rebuild only the frontend bundle (vite build)
 ./gradlew :backend:test                   # all backend tests
+podman build -f podman/Containerfile -t localhost/todo-app:latest .   # after bootJar; deploy with podman/todo-pod.yaml + podman/secrets.yaml (see README.md); scripts/backup-db.sh for dumps
 ./gradlew :backend:test --tests ca.antany.app.todo.SyncTest
 ```
 

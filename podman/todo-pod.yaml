@@ -1,0 +1,40 @@
+# App + Postgres + Cloudflare Tunnel in one pod. Nothing is published on the host:
+# the only way in is through the tunnel. Containers share localhost inside the pod.
+#   podman kube play podman/secrets.yaml podman/todo-pod.yaml
+# The Google keys and allowed-emails are optional: leave them out of the secret for password-only sign-in.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: todo
+spec:
+  containers:
+    - name: app
+      image: localhost/todo-app:latest
+      env:
+        - { name: DB_URL, value: "jdbc:postgresql://localhost:5432/todo" }
+        - { name: DB_USER, value: todo }
+        - { name: DB_PASSWORD, valueFrom: { secretKeyRef: { name: todo-secrets, key: db-password } } }
+        - { name: GOOGLE_CLIENT_ID, valueFrom: { secretKeyRef: { name: todo-secrets, key: google-client-id, optional: true } } }
+        - { name: GOOGLE_CLIENT_SECRET, valueFrom: { secretKeyRef: { name: todo-secrets, key: google-client-secret, optional: true } } }
+        - { name: APP_ALLOWED_EMAILS, valueFrom: { secretKeyRef: { name: todo-secrets, key: allowed-emails, optional: true } } }
+        # Set to "false" once everyone has an account to close username/password sign-up.
+        - { name: APP_PASSWORD_SIGNUP, value: "true" }
+        - { name: SERVER_FORWARD_HEADERS_STRATEGY, value: framework }
+        - { name: SERVER_SERVLET_SESSION_COOKIE_SECURE, value: "true" }
+    - name: postgres
+      image: docker.io/library/postgres:17
+      env:
+        - { name: POSTGRES_DB, value: todo }
+        - { name: POSTGRES_USER, value: todo }
+        - { name: POSTGRES_PASSWORD, valueFrom: { secretKeyRef: { name: todo-secrets, key: db-password } } }
+      volumeMounts:
+        - { name: data, mountPath: /var/lib/postgresql/data }
+    - name: tunnel
+      image: docker.io/cloudflare/cloudflared:latest
+      args: ["tunnel", "--no-autoupdate", "run"]
+      env:
+        - { name: TUNNEL_TOKEN, valueFrom: { secretKeyRef: { name: todo-secrets, key: tunnel-token } } }
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: todo-prod-db-data

@@ -96,7 +96,7 @@
     <tr><td>Installable PWA (home-screen app), mobile layout</td><td><span class="tag done">built</span>, icons are placeholders</td></tr>
     <tr><td>Sharing lists with view/edit roles (invite by Google email or username, must accept)</td><td><span class="tag done">built</span></td></tr>
     <tr><td>Reminders and follow-ups: "Due now" card, snooze, optional notifications while the app is open</td><td><span class="tag done">built</span></td></tr>
-    <tr><td>Container image, pod file, backup script, README</td><td><span class="tag soon">planned</span></td></tr>
+    <tr><td>Container image, pod file, backup script, README</td><td><span class="tag done">built</span>, tested with a throwaway pod</td></tr>
   </table>
 </section>
 
@@ -202,7 +202,7 @@ systemctl --user start podman.socket
 <pre><code>phone / laptop  --HTTPS-->  reverse proxy or tunnel  -->  app (jar, :8080, path /todo)  -->  Postgres 17
                             (Caddy, nginx, Cloudflare Tunnel)</code></pre>
   <p>Recommended target, matching the existing expense tracker: one rootless <strong>podman pod</strong> on your own server holding three containers (app, Postgres, Cloudflare Tunnel), nothing published on the host except through the tunnel. A plain systemd service running the jar next to an existing Postgres works just as well.</p>
-  <div class="note">Files for the container route (<code>podman/Containerfile</code>, <code>podman/todo-pod.yaml</code>, <code>podman/secrets.example.yaml</code>, <code>scripts/backup-db.sh</code>) are <strong>not in the repo yet</strong>; they are step 7 of the plan. The snippets below are the intended content, modelled on the expense tracker's.</div>
+  <div class="note">The files for this route are in the repo: <code>podman/Containerfile</code>, <code>podman/todo-pod.yaml</code>, <code>podman/secrets.example.yaml</code> and <code>scripts/backup-db.sh</code>. The pod (app + Postgres) was started from them and migrated, registered an account and backed up correctly; the Cloudflare tunnel container was not tested because it needs your token.</div>
   <p>Only one app instance is needed for personal or family use. Sync requests are serialised by a database lock, which also makes it safe if you ever run two instances against one database.</p>
 </section>
 
@@ -239,9 +239,47 @@ systemctl --user start podman.socket
 
 <section id="build">
   <h2>8. Build and package</h2>
-<pre><code>./gradlew :backend:bootJar
-# -> backend/build/libs/backend-0.1.0.jar   (React bundle included, about 32 MB)</code></pre>
-  <p>Runtime needs Java 25. To containerise (planned <code>podman/Containerfile</code>):</p>
+<pre><code># App + Postgres + Cloudflare Tunnel in one pod. Nothing is published on the host:
+# the only way in is through the tunnel. Containers share localhost inside the pod.
+#   podman kube play podman/secrets.yaml podman/todo-pod.yaml
+# The Google keys and allowed-emails are optional: leave them out of the secret for password-only sign-in.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: todo
+spec:
+  containers:
+    - name: app
+      image: localhost/todo-app:latest
+      env:
+        - { name: DB_URL, value: "jdbc:postgresql://localhost:5432/todo" }
+        - { name: DB_USER, value: todo }
+        - { name: DB_PASSWORD, valueFrom: { secretKeyRef: { name: todo-secrets, key: db-password } } }
+        - { name: GOOGLE_CLIENT_ID, valueFrom: { secretKeyRef: { name: todo-secrets, key: google-client-id, optional: true } } }
+        - { name: GOOGLE_CLIENT_SECRET, valueFrom: { secretKeyRef: { name: todo-secrets, key: google-client-secret, optional: true } } }
+        - { name: APP_ALLOWED_EMAILS, valueFrom: { secretKeyRef: { name: todo-secrets, key: allowed-emails, optional: true } } }
+        # Set to "false" once everyone has an account to close username/password sign-up.
+        - { name: APP_PASSWORD_SIGNUP, value: "true" }
+        - { name: SERVER_FORWARD_HEADERS_STRATEGY, value: framework }
+        - { name: SERVER_SERVLET_SESSION_COOKIE_SECURE, value: "true" }
+    - name: postgres
+      image: docker.io/library/postgres:17
+      env:
+        - { name: POSTGRES_DB, value: todo }
+        - { name: POSTGRES_USER, value: todo }
+        - { name: POSTGRES_PASSWORD, valueFrom: { secretKeyRef: { name: todo-secrets, key: db-password } } }
+      volumeMounts:
+        - { name: data, mountPath: /var/lib/postgresql/data }
+    - name: tunnel
+      image: docker.io/cloudflare/cloudflared:latest
+      args: ["tunnel", "--no-autoupdate", "run"]
+      env:
+        - { name: TUNNEL_TOKEN, valueFrom: { secretKeyRef: { name: todo-secrets, key: tunnel-token } } }
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: todo-prod-db-data</code></pre>
+  <p>Runtime needs Java 25. To containerise (<code>podman/Containerfile</code>):</p>
 <pre><code>FROM docker.io/library/eclipse-temurin:25-jre
 RUN useradd --system --uid 10001 app
 COPY backend/build/libs/backend-0.1.0.jar /app/app.jar
@@ -255,7 +293,7 @@ ENTRYPOINT ["java", "-jar", "/app/app.jar"]</code></pre>
   <h2>9. Run in production</h2>
 
   <h3>Option A: podman pod (recommended)</h3>
-  <p>Planned <code>podman/secrets.example.yaml</code> (copy to the git-ignored <code>podman/secrets.yaml</code> and fill in):</p>
+  <p><code>podman/secrets.example.yaml</code> (copy to the git-ignored <code>podman/secrets.yaml</code> and fill in):</p>
 <pre><code>apiVersion: v1
 kind: Secret
 metadata:
@@ -266,7 +304,7 @@ stringData:
   google-client-secret: GOCSPX-change-me
   allowed-emails: you@gmail.com,family@gmail.com
   tunnel-token: eyJ-change-me          # only if you use a Cloudflare Tunnel</code></pre>
-  <p>Planned <code>podman/todo-pod.yaml</code>:</p>
+  <p><code>podman/todo-pod.yaml</code>:</p>
 <pre><code>apiVersion: v1
 kind: Pod
 metadata:
@@ -331,7 +369,7 @@ Restart=on-failure</code></pre>
   <h2>11. Backups, upgrades, rollback</h2>
 
   <h3>Backups</h3>
-  <p>Two layers: each person can export JSON from <em>Settings</em>, and you back up the database. A nightly dump from the running pod (planned <code>scripts/backup-db.sh</code>, same idea as the expense tracker's):</p>
+  <p>Two layers: each person can export JSON from <em>Settings</em>, and you back up the database. A nightly dump from the running pod (<code>scripts/backup-db.sh</code>, also usable from cron):</p>
 <pre><code>podman exec todo-postgres pg_dump -U todo todo | gzip &gt; ~/backups/todo/todo_$(date +%F).sql.gz
 # keep the newest ~14, run from cron or a systemd timer, and copy off the machine
 # restore into an empty database:
