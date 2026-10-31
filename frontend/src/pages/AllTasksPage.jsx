@@ -7,6 +7,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import SortIcon from '@mui/icons-material/Sort';
 import TaskRow from '../components/TaskRow';
 import TaskSheet from '../components/TaskSheet';
+import DueReminders from '../components/DueReminders';
 import { liveLists, subtasksOf, toggleTask, undoComplete, useStore } from '../db/store';
 import { useToast } from '../toast';
 
@@ -64,6 +65,7 @@ export default function AllTasksPage() {
         ))}
       </Menu>
 
+      <DueReminders />
       <TextField
         name="search" placeholder="Search all tasks" value={query} onChange={(e) => setQuery(e.target.value)} sx={{ mb: 1 }}
         slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> } }}

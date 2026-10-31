@@ -2,6 +2,7 @@ import { Box, Checkbox, Chip, ListItem, ListItemButton, Stack, Typography } from
 import FlagIcon from '@mui/icons-material/Flag';
 import EventIcon from '@mui/icons-material/Event';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
+import AlarmIcon from '@mui/icons-material/Alarm';
 import RepeatIcon from '@mui/icons-material/Repeat';
 import ChecklistIcon from '@mui/icons-material/Checklist';
 import HourglassTopIcon from '@mui/icons-material/HourglassTop';
@@ -42,6 +43,9 @@ export default function TaskRow({ task, subs = [], list, onToggle, onOpen, handl
             )}
             {task.followUpAt && !done && (
               <Chip size="small" icon={<NotificationsActiveIcon />} color={followDue ? 'secondary' : 'default'} variant={followDue ? 'filled' : 'outlined'} label={`Follow up ${formatWhen(task.followUpAt)}`} />
+            )}
+            {task.remindAt && !done && (
+              <Chip size="small" icon={<AlarmIcon />} variant="outlined" label={formatWhen(task.remindAt)} />
             )}
             {task.status === 'WAITING' && <Chip size="small" icon={<HourglassTopIcon />} variant="outlined" label="Waiting" />}
             {task.status === 'IN_PROGRESS' && <Chip size="small" color="primary" variant="outlined" label="In progress" />}

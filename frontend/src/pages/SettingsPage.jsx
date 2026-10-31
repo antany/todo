@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react';
-import { Alert, Box, Button, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, FormControlLabel, Stack, Switch, TextField, Typography } from '@mui/material';
 import { api, ApiError } from '../api';
 import { useSession } from '../session';
 import { describeSync } from '../components/SyncStatus';
 import { syncNow, useSyncStatus } from '../sync/engine';
+import { disableNotifications, enableNotifications, notificationsOn, notificationsSupported } from '../reminders';
 import { exportData, importData, resetData } from '../db/store';
 
 function ChangePassword() {
@@ -30,6 +31,31 @@ function ChangePassword() {
         {msg && <Alert severity={msg.severity} onClose={() => setMsg(null)}>{msg.text}</Alert>}
         <Button type="submit" variant="outlined" disabled={!current || !next}>Change password</Button>
       </Stack>
+    </Box>
+  );
+}
+
+function Reminders() {
+  const [on, setOn] = useState(notificationsOn);
+  const [note, setNote] = useState(null);
+  const toggle = async (e) => {
+    if (!e.target.checked) {
+      disableNotifications();
+      setOn(false);
+      return;
+    }
+    const result = await enableNotifications();
+    setOn(result === 'on');
+    setNote(result === 'denied' ? 'Notifications are blocked for this site. Allow them in the browser settings, then try again.' : result === 'unsupported' ? 'This browser does not support notifications.' : null);
+  };
+  return (
+    <Box sx={{ mb: 3 }}>
+      <Typography variant="h6" sx={{ mb: 0.5 }}>Reminders</Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+        Reminders and follow-ups that are due always appear at the top of All tasks. Notifications add a system alert when the app is open but in the background or another tab. They cannot wake a closed app.
+      </Typography>
+      <FormControlLabel control={<Switch checked={on} onChange={toggle} disabled={!notificationsSupported()} />} label="Show notifications" />
+      {note && <Alert severity="warning" sx={{ mt: 1 }}>{note}</Alert>}
     </Box>
   );
 }
@@ -79,6 +105,7 @@ export default function SettingsPage() {
         </Stack>
       )}
       {msg && <Alert severity={msg.severity} sx={{ mb: 2 }} onClose={() => setMsg(null)}>{msg.text}</Alert>}
+      <Reminders />
       {me?.passwordLogin && <ChangePassword />}
       <Typography variant="h6" sx={{ mb: 1 }}>Backup</Typography>
       <Stack direction="row" spacing={1} sx={{ mb: 3 }}>

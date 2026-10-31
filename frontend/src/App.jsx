@@ -26,6 +26,7 @@ import { liveLists, useStore } from './db/store';
 import { ToastProvider } from './toast';
 import { useThemeMode } from './themeMode';
 import InvitationsButton from './components/Invitations';
+import { useReminderAnnouncer } from './reminders';
 
 const NAV = [
   { path: '/all', label: 'All tasks', icon: <ChecklistIcon /> },
@@ -74,6 +75,7 @@ export default function App() {
   const { pathname } = useLocation();
   const nav = useNavigate();
   const state = useStore();
+  useReminderAnnouncer();
   const current = NAV.find((n) => pathname.startsWith(n.path))?.path ?? '/all';
 
   return (

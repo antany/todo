@@ -95,7 +95,7 @@
     <tr><td>Continuous sync with Postgres, merging local and cloud data</td><td><span class="tag done">built</span></td></tr>
     <tr><td>Installable PWA (home-screen app), mobile layout</td><td><span class="tag done">built</span>, icons are placeholders</td></tr>
     <tr><td>Sharing lists with view/edit roles (invite by Google email or username, must accept)</td><td><span class="tag done">built</span></td></tr>
-    <tr><td>Reminder notifications that actually fire</td><td><span class="tag soon">planned</span></td></tr>
+    <tr><td>Reminders and follow-ups: "Due now" card, snooze, optional notifications while the app is open</td><td><span class="tag done">built</span></td></tr>
     <tr><td>Container image, pod file, backup script, README</td><td><span class="tag soon">planned</span></td></tr>
   </table>
 </section>
@@ -384,7 +384,7 @@ gunzip -c todo_2026-11-01.sql.gz | podman exec -i todo-postgres psql -U todo tod
   <h2>14. Known limitations and roadmap</h2>
   <ul>
     <li><strong>Sharing:</strong> only the owner can rename, recolour or delete a shared list and manage its members. A list holds at most 50 members. If someone is removed, the list vanishes from their devices on their next sync, including any edits they had not synced yet.</li>
-    <li><strong>Reminders do not notify yet</strong> (step 6): reminder times are saved and synced. True background push is out of scope; the plan is in-app alerts plus opt-in browser notifications while the app is open.</li>
+    <li><strong>Reminders need the app open.</strong> Due reminders and follow-ups show in a &ldquo;Due now&rdquo; card on All tasks (snooze or dismiss), and, if you switch on <em>Show notifications</em> in Settings, as system notifications while the app is open in the background. A fully closed app cannot notify you: that needs a push server, which this project does not have.</li>
     <li><strong>Merge is per task</strong>, not per field: two devices editing different fields of the same task while offline will keep only the later edit.</li>
     <li><strong>Google sign-in untested end to end</strong> until an OAuth client exists. Username sign-in is tested end to end.</li>
     <li><strong>No password reset or account recovery</strong> for username accounts, by design. Google and username accounts cannot be linked.</li>

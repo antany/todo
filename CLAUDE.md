@@ -6,8 +6,7 @@ Todo PWA: several todo lists per person, offline-first (localStorage when signed
 
 ## Status
 
-Built plan steps 1-5 (incl. sharing), an "All tasks" landing page and the theme. Remaining:
-- **Step 6:** reminders (`remindAt` is stored but nothing fires), polish.
+Built plan steps 1-6 (sharing, reminders), an "All tasks" landing page and the theme. Remaining:
 - **Step 7:** PWA icons (currently copied from expense-tracker), `Containerfile` + pod yaml + backup script, README.
 Nothing is committed to git yet (repo is initialised on `main`).
 
@@ -68,7 +67,7 @@ Integration tests extend `IntegrationTestBase` (one shared Postgres container; `
 ## Things to know
 
 - Browser tests of signed-in screens need a throwaway dev-login shim (a `@Profile("devshim")` controller that provisions a user and stores an OIDC `SecurityContext` in the session; call it with `fetch`, not navigation). **Never commit it**; delete it and restart without the profile afterwards.
-- Reminders: `remindAt` is stored and synced but no notification fires yet. Web push in the background is out of scope.
+- Reminders (`src/reminders.js`, `components/DueReminders.jsx`): a task is due once `remindAt` or `followUpAt` has passed and it is not done. Due items show in a "Due now" card at the top of All tasks (Snooze 1h / tomorrow / next week, Dismiss = clear the field) and in the tab title `(n) Todo`. With the Settings switch on (`todo.notify`), newly due items also raise a system notification via the service worker, **only while the page is hidden**; each fires once (`todo.notified`). `public/notification-click.js` is pulled into the generated SW with workbox `importScripts` and focuses/opens the app on tap. A closed app cannot notify (no push server); timers also throttle in background tabs. Browser-tested by editing `todo.v1` from a second tab (storage event) so the first tab is hidden.
 - Postgres dev DB can be wiped with `drop schema public cascade; create schema public;` and a restart (Flyway rebuilds it).
 - **Spring Boot 4 renamed the error-message property:** use `spring.web.error.include-message: always` (the old `server.error.include-message` is silently ignored, so API error messages like `"Wrong username or password"` never reach the browser). The sibling expense-tracker still uses the old key.
 - When driving forms with puppeteer on a phone viewport, submit with Enter: the fixed bottom navigation can sit over a lower button and swallow the click.

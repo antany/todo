@@ -35,6 +35,7 @@ export default defineConfig({
         // /oauth2 and /login/oauth2 are the Google sign-in redirects: the server must answer them, never index.html.
         navigateFallbackDenylist: [/^\/todo\/api\//, /^\/todo\/oauth2\//, /^\/todo\/login\/oauth2\//],
         globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
+        importScripts: [`${base}notification-click.js`],
         cleanupOutdatedCaches: true,
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
       },
