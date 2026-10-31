@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Todo app: Raspberry Pi multi-arch deployment</title>
+<style>
+  :root {
+    --bg: #eef2fa; --paper: #ffffff; --text: #1b1f2a; --muted: #5a6275; --line: #d5dbea;
+    --primary: #3949ab; --accent: #00acc1; --code-bg: #f3f5fb; --warn-bg: #fff6e0; --warn-line: #f0c36d;
+    --ok-bg: #e6f6ee; --ok-line: #8ed1ad; --todo-bg: #eceefb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1220; --paper: #151c30; --text: #e6e9f4; --muted: #9aa3bb; --line: #26304d;
+      --primary: #9fa8ff; --accent: #4dd0e1; --code-bg: #0f1527; --warn-bg: #2b2412; --warn-line: #7a6228;
+      --ok-bg: #12291f; --ok-line: #2f6a4c; --todo-bg: #1b2140;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 Roboto, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { background: var(--primary); color: #fff; padding: 28px 16px; }
+  @media (prefers-color-scheme: dark) { header { color: #0d1220; } }
+  header .in, main { max-width: 900px; margin: 0 auto; padding: 0 16px; }
+  header h1 { margin: 0 0 4px; font-size: 1.7rem; }
+  header p { margin: 0; opacity: .9; }
+  main { padding-top: 20px; padding-bottom: 60px; }
+  nav.toc { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 14px 18px; margin-bottom: 20px; }
+  nav.toc ol { margin: 6px 0 0; padding-left: 20px; columns: 2; column-gap: 28px; }
+  @media (max-width: 600px) { nav.toc ol { columns: 1; } }
+  section { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 6px 20px 18px; margin-bottom: 20px; }
+  h2 { color: var(--primary); margin: 18px 0 4px; font-size: 1.35rem; }
+  h3 { margin: 20px 0 4px; font-size: 1.05rem; }
+  a { color: var(--primary); }
+  code { background: var(--code-bg); border-radius: 5px; padding: 1px 5px; font: .88em ui-monospace, SFMono-Regular, Menlo, monospace; }
+  pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; overflow-x: auto; font: .85rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: .93rem; display: block; overflow-x: auto; }
+  th, td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); }
+  .note, .warn, .ok { border-radius: 10px; padding: 10px 14px; margin: 12px 0; border: 1px solid; }
+  .note { background: var(--todo-bg); border-color: var(--line); }
+  .warn { background: var(--warn-bg); border-color: var(--warn-line); }
+  .ok { background: var(--ok-bg); border-color: var(--ok-line); }
+  .tag { display: inline-block; font-size: .72rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; border-radius: 999px; padding: 1px 9px; margin-left: 6px; vertical-align: middle; }
+  .tag.done { background: var(--ok-bg); border: 1px solid var(--ok-line); }
+  .tag.soon { background: var(--warn-bg); border: 1px solid var(--warn-line); }
+  ul, ol { padding-left: 22px; }
+  li { margin: 3px 0; }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; padding-bottom: 30px; }
+</style>
+</head>
+<body>
+<header><div class="in">
+  <h1>Build and deploy to a Raspberry Pi</h1>
+  <p>One multi-arch image (x86-64 and ARM 64-bit) built with podman, run as a rootless pod on a Pi.</p>
+</div></header>
+<main>
+<nav class="toc"><strong>Contents</strong>
+<ol>
+  <li><a href="#overview">How it fits together</a></li>
+  <li><a href="#pi-prep">Prepare the Raspberry Pi</a></li>
+  <li><a href="#build-host">Prepare the build machine</a></li>
+  <li><a href="#build">Build the multi-arch image</a></li>
+  <li><a href="#ship">Get the image onto the Pi</a></li>
+  <li><a href="#secrets">Secrets and configuration</a></li>
+  <li><a href="#run">Run the pod</a></li>
+  <li><a href="#boot">Start at boot (Quadlet)</a></li>
+  <li><a href="#backup">Backups</a></li>
+  <li><a href="#update">Updating to a new version</a></li>
+  <li><a href="#trouble">Troubleshooting</a></li>
+</ol></nav>
+
+<section id="overview">
+  <h2>1. How it fits together</h2>
+  <p>The app is a single Spring Boot jar that already contains the React bundle. A jar is the same bytes on every CPU, so you build it <em>once</em>; only the container base image (the JVM) differs per architecture. The image is published as a <strong>manifest list</strong> with two entries, <code>linux/amd64</code> and <code>linux/arm64</code>, and each machine pulls the one that matches it.</p>
+  <table>
+    <tr><th>Piece</th><th>Image</th><th>amd64</th><th>arm64</th></tr>
+    <tr><td>App</td><td><code>todo-app</code> (built here, base <code>eclipse-temurin:25-jre</code>)</td><td>yes</td><td>yes</td></tr>
+    <tr><td>Database</td><td><code>postgres:17</code></td><td>yes</td><td>yes</td></tr>
+    <tr><td>Tunnel (optional)</td><td><code>cloudflare/cloudflared</code></td><td>yes</td><td>yes</td></tr>
+  </table>
+  <div class="ok">The <code>Containerfile</code> has no <code>RUN</code> steps on purpose, so building the arm64 variant on an x86 PC needs <strong>no QEMU emulation</strong> and takes seconds. It runs as unprivileged uid 10001.</div>
+  <p>Pod layout: <code>app</code>, <code>postgres</code> and <code>tunnel</code> share one network namespace and publish nothing on the host; the only way in is the Cloudflare Tunnel (see section 10 of the <a href="usage-and-deployment.html">main guide</a> for other reverse proxies).</p>
+</section>
+
+<section id="pi-prep">
+  <h2>2. Prepare the Raspberry Pi</h2>
+  <h3>Hardware and OS</h3>
+  <ul>
+    <li><strong>Pi 3, 4, 5 or 400</strong> (or Zero 2 W only for a quick trial: 512 MB is too little for JVM + Postgres). <strong>2 GB RAM minimum, 4 GB comfortable.</strong></li>
+    <li><strong>64-bit OS is required</strong>: Raspberry Pi OS (64-bit) / Debian 12+ / Ubuntu Server arm64. The 32-bit image cannot run the arm64 containers. Check with <code>uname -m</code>: it must print <code>aarch64</code>.</li>
+    <li>Put the database on an <strong>SSD or good USB drive</strong> if you can. Postgres on an SD card works but wears the card; at the very least use an A1/A2 rated card and keep nightly backups off the card.</li>
+  </ul>
+  <h3>Install podman and enable boot-time user services</h3>
+<pre><code>sudo apt update
+sudo apt install -y podman uidmap slirp4netns passt cron
+podman --version                  # 4.4+ needed for Quadlet; Debian 12 has 4.3, see the note below
+
+# let your user's containers start at boot and survive logout
+sudo loginctl enable-linger $USER</code></pre>
+  <div class="note">Debian 12 (bookworm) ships podman 4.3, which predates Quadlet. Use Debian 13 / Raspberry Pi OS trixie / Ubuntu 24.04+ (podman 4.9 to 5.x), or skip section 8 and use <code>podman generate systemd</code> instead.</div>
+  <h3>Give the JVM a memory cap</h3>
+  <p>Containers inherit the Pi's RAM, and Java sizes its heap from it. On a 2 GB Pi, cap it so Postgres keeps room. In <code>podman/todo-pod.yaml</code>, add to the <code>app</code> container's <code>env</code>:</p>
+<pre><code>        - { name: JAVA_TOOL_OPTIONS, value: "-Xmx384m -XX:+UseSerialGC" }</code></pre>
+  <p>Use <code>-Xmx768m</code> on 4 GB or more. Startup takes 20 to 40 s on a Pi 4; that is normal.</p>
+</section>
+
+<section id="build-host">
+  <h2>3. Prepare the build machine</h2>
+  <p>Any x86-64 or arm64 Linux box with <strong>JDK 25</strong> and <strong>podman</strong> works (Node is not needed; npm runs in a <code>node:22</code> container through Gradle). The Pi itself can be the build machine, it is just slower (the frontend build takes a few minutes).</p>
+<pre><code>git clone &lt;your-repo-url&gt; todo-app &amp;&amp; cd todo-app
+java -version         # 25
+podman --version</code></pre>
+  <div class="note">You only need QEMU (<code>qemu-user-static</code> + binfmt) if you later add a <code>RUN</code> step to the <code>Containerfile</code>. Without it, cross-arch builds work as is.</div>
+</section>
+
+<section id="build">
+  <h2>4. Build the multi-arch image</h2>
+  <p>The script builds the jar and then both platforms into one manifest list:</p>
+<pre><code>scripts/build-multiarch.sh                       # local manifest: localhost/todo-app:latest
+scripts/build-multiarch.sh ghcr.io/YOU/todo-app:1.0 --push     # build and push to a registry</code></pre>
+  <p>What it does, if you prefer to run the steps by hand:</p>
+<pre><code>./gradlew :backend:bootJar          # builds the React bundle into backend/build/libs/backend-0.1.0.jar
+
+podman manifest rm localhost/todo-app:latest 2&gt;/dev/null || true
+podman build --platform linux/amd64,linux/arm64 \
+    -f podman/Containerfile --manifest localhost/todo-app:latest .
+
+podman manifest inspect localhost/todo-app:latest | grep -E '"(architecture|os)"'
+#   "architecture": "amd64", "os": "linux"
+#   "architecture": "arm64", "os": "linux"</code></pre>
+  <div class="ok">Both variants were built and the amd64 one was started as uid 10001 on Java 25 while writing this guide. The arm64 variant was built but not run (no Pi was available), so do the first-boot check in section 7 on the Pi.</div>
+  <p>Push to a registry (<code>podman login ghcr.io</code> first). <code>--all</code> is required, otherwise only the manifest list for your own architecture is uploaded:</p>
+<pre><code>podman manifest push --all ghcr.io/YOU/todo-app:1.0 docker://ghcr.io/YOU/todo-app:1.0</code></pre>
+</section>
+
+<section id="ship">
+  <h2>5. Get the image onto the Pi</h2>
+  <h3>Option A: through a registry (recommended)</h3>
+  <p>A private GHCR/Docker Hub repo works, or run your own with <code>podman run -d -p 5000:5000 docker.io/library/registry:2</code> (plain HTTP registries need <code>insecure = true</code> in <code>/etc/containers/registries.conf.d/</code> on the Pi). On the Pi:</p>
+<pre><code>podman login ghcr.io
+podman pull ghcr.io/YOU/todo-app:1.0
+podman tag  ghcr.io/YOU/todo-app:1.0 localhost/todo-app:latest   # name used by podman/todo-pod.yaml</code></pre>
+  <p>Podman picks the <code>arm64</code> entry automatically. Check: <code>podman image inspect localhost/todo-app:latest --format '{{.Architecture}}'</code> prints <code>arm64</code>.</p>
+  <h3>Option B: no registry, copy a tarball</h3>
+  <p>Build just the Pi's variant, save it, and copy it over:</p>
+<pre><code># on the build machine
+./gradlew :backend:bootJar
+podman build --platform linux/arm64 -f podman/Containerfile -t localhost/todo-app:latest .
+podman save -o todo-app-arm64.tar localhost/todo-app:latest
+scp todo-app-arm64.tar pi@raspberrypi.local:
+
+# on the Pi
+podman load -i todo-app-arm64.tar</code></pre>
+  <p>Also copy the deploy files: <code>scp -r podman scripts pi@raspberrypi.local:todo-app/</code> (or clone the repo on the Pi).</p>
+  <h3>Option C: build on the Pi itself</h3>
+<pre><code>git clone &lt;your-repo-url&gt; todo-app &amp;&amp; cd todo-app
+./gradlew :backend:bootJar
+podman build -f podman/Containerfile -t localhost/todo-app:latest .</code></pre>
+</section>
+
+<section id="secrets">
+  <h2>6. Secrets and configuration</h2>
+<pre><code>cd ~/todo-app
+cp podman/secrets.example.yaml podman/secrets.yaml
+chmod 600 podman/secrets.yaml
+nano podman/secrets.yaml</code></pre>
+  <table>
+    <tr><th>Key</th><th>Meaning</th></tr>
+    <tr><td><code>db-password</code></td><td>Required. Use a long random string: <code>openssl rand -base64 24</code>. It is read by both Postgres (on first start only) and the app.</td></tr>
+    <tr><td><code>tunnel-token</code></td><td>Cloudflare Zero Trust &gt; Networks &gt; Tunnels &gt; your tunnel. Point its public hostname at <code>http://localhost:8080</code>. Remove the <code>tunnel</code> container from the pod if you use something else.</td></tr>
+    <tr><td><code>google-client-id</code>, <code>google-client-secret</code>, <code>allowed-emails</code></td><td>Optional. Leave out for username/password only. Redirect URI for Google: <code>https://YOUR-HOST/todo/login/oauth2/code/google</code>.</td></tr>
+  </table>
+  <div class="warn">Changing <code>db-password</code> later does <strong>not</strong> change the password inside an existing Postgres data volume. Either change it in Postgres too (<code>ALTER USER</code>) or wipe the volume.</div>
+  <p>Other settings (<code>APP_PASSWORD_SIGNUP</code>, <code>APP_ALLOWED_EMAILS</code>, cookie flags) are in <code>podman/todo-pod.yaml</code>; the full list is in the main guide.</p>
+</section>
+
+<section id="run">
+  <h2>7. Run the pod</h2>
+<pre><code>podman kube play podman/secrets.yaml podman/todo-pod.yaml
+
+podman pod ps
+podman ps --format '{{.Names}}  {{.Status}}'      # todo-app, todo-postgres, todo-tunnel
+podman logs -f todo-app                          # wait for "Started TodoApplication"</code></pre>
+  <p><strong>First-boot check on the Pi</strong> (nothing is published on the host, so test from inside the pod):</p>
+<pre><code>podman exec todo-app sh -c 'uname -m; java -version 2&gt;&amp;1 | head -1'     # aarch64, openjdk 25
+podman exec todo-postgres pg_isready -U todo
+# then open https://YOUR-HOSTNAME/todo/ from a phone</code></pre>
+  <p>Need to try it on the LAN before the tunnel is set up? Add <code>ports: [{ containerPort: 8080, hostPort: 8080 }]</code> to the <code>app</code> container, open <code>http://raspberrypi.local:8080/todo/</code>, and remove it again afterwards. Sign-in cookies are marked secure, so test sign-in over HTTPS or temporarily set <code>SERVER_SERVLET_SESSION_COOKIE_SECURE</code> to <code>"false"</code>.</p>
+  <p>Stop and remove (the database volume is kept): <code>podman kube down podman/todo-pod.yaml</code>.</p>
+</section>
+
+<section id="boot">
+  <h2>8. Start at boot (Quadlet)</h2>
+  <p>With linger enabled (section 2), a Quadlet <code>.kube</code> file makes systemd start the pod on every boot and restart it if it dies. Use absolute paths:</p>
+<pre><code>mkdir -p ~/.config/containers/systemd
+cat &gt; ~/.config/containers/systemd/todo.kube &lt;&lt;'EOF'
+[Unit]
+Description=Todo app pod
+After=network-online.target
+Wants=network-online.target
+
+[Kube]
+Yaml=/home/pi/todo-app/podman/secrets.yaml
+Yaml=/home/pi/todo-app/podman/todo-pod.yaml
+
+[Service]
+Restart=on-failure
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target
+EOF
+
+systemctl --user daemon-reload
+systemctl --user start todo.service
+systemctl --user status todo.service
+journalctl --user -u todo.service -f</code></pre>
+  <div class="note">Replace <code>/home/pi</code> with your home directory. Quadlet units are generated, so there is no <code>enable</code> step: the <code>[Install]</code> section is enough. If your podman does not accept two <code>Yaml=</code> lines, run <code>podman kube play podman/secrets.yaml</code> once by hand (secrets persist in podman) and keep only the pod file in the unit.</div>
+  <p>Reboot once and confirm the app comes back by itself: <code>sudo reboot</code>, then <code>podman ps</code>.</p>
+</section>
+
+<section id="backup">
+  <h2>9. Backups</h2>
+<pre><code>chmod +x scripts/backup-db.sh
+BACKUP_DIR=/mnt/usb/todo-backups scripts/backup-db.sh     # try it once
+crontab -e
+# 15 3 * * *  BACKUP_DIR=/mnt/usb/todo-backups /home/pi/todo-app/scripts/backup-db.sh</code></pre>
+  <p>Keep the backup folder on a different device than the database (USB stick or network share), otherwise a dead SD card takes both. Restore: <code>gunzip -c todo_&lt;stamp&gt;.sql.gz | podman exec -i todo-postgres psql -U todo todo</code>.</p>
+</section>
+
+<section id="update">
+  <h2>10. Updating to a new version</h2>
+  <ol>
+    <li>On the build machine: <code>git pull</code>, then <code>scripts/build-multiarch.sh ghcr.io/YOU/todo-app:1.1 --push</code>.</li>
+    <li>On the Pi: <code>scripts/backup-db.sh</code>, then <code>podman pull ghcr.io/YOU/todo-app:1.1</code> and <code>podman tag ghcr.io/YOU/todo-app:1.1 localhost/todo-app:latest</code> (or <code>podman load</code> a new tarball).</li>
+    <li>Recreate the pod: <code>systemctl --user restart todo.service</code>, or by hand <code>podman kube down podman/todo-pod.yaml &amp;&amp; podman kube play podman/secrets.yaml podman/todo-pod.yaml</code>.</li>
+  </ol>
+  <p>Database migrations (Flyway) run automatically on start. Rollback: re-tag the previous image as <code>latest</code> and restart; if a release added a migration, restore the pre-update backup too, because Flyway migrations are not reversed.</p>
+</section>
+
+<section id="trouble">
+  <h2>11. Troubleshooting</h2>
+  <table>
+    <tr><th>Symptom</th><th>Cause and fix</th></tr>
+    <tr><td><code>exec format error</code></td><td>Wrong-architecture image (for example an amd64 tarball loaded on the Pi). Rebuild with <code>--platform linux/arm64</code>, or use the manifest list. Also confirm <code>uname -m</code> is <code>aarch64</code>, not <code>armv7l</code> (32-bit OS).</td></tr>
+    <tr><td>Registry pull gets the wrong arch / "no image found for architecture"</td><td>The push was missing <code>--all</code>, so the manifest list was not uploaded. Push again with <code>podman manifest push --all</code>.</td></tr>
+    <tr><td>App killed (exit 137) or Pi freezes</td><td>Out of memory. Set <code>JAVA_TOOL_OPTIONS</code> (section 2), add swap, or use a Pi with more RAM.</td></tr>
+    <tr><td>App restarts with "password authentication failed"</td><td>The Postgres volume was created with a different <code>db-password</code>. See the warning in section 6.</td></tr>
+    <tr><td>Everything works but sign-in loops or redirects to <code>http://</code></td><td>Keep <code>SERVER_FORWARD_HEADERS_STRATEGY=framework</code> and serve over HTTPS.</td></tr>
+    <tr><td>Pod does not start after reboot</td><td><code>loginctl enable-linger $USER</code> not set, or the unit cannot reach the network yet: <code>journalctl --user -u todo.service</code>.</td></tr>
+    <tr><td>Rootless build fails with "no subuid/subgid"</td><td>Install <code>uidmap</code> and add ranges: <code>sudo usermod --add-subuids 100000-165535 --add-subgids 100000-165535 $USER</code>, then <code>podman system migrate</code>.</td></tr>
+  </table>
+</section>
+</main>
+<footer>Part of the Todo app docs. See also <a href="usage-and-deployment.html">usage and deployment</a>.</footer>
+</body></html>

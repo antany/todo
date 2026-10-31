@@ -24,6 +24,8 @@ cp podman/secrets.example.yaml podman/secrets.yaml   # fill in, chmod 600
 podman kube play podman/secrets.yaml podman/todo-pod.yaml
 ```
 
+Raspberry Pi / multi-arch (x86-64 + arm64): `scripts/build-multiarch.sh`, walkthrough in **[docs/deploy-raspberry-pi.html](docs/deploy-raspberry-pi.html)**.
+
 Nightly backup: `scripts/backup-db.sh` (cron it). Full walkthrough (Cloudflare Tunnel, Google setup, configuration, updating, troubleshooting) is in **[docs/usage-and-deployment.html](docs/usage-and-deployment.html)**; open it in a browser.
 
 Developer notes (architecture, sync design, conventions) are in [CLAUDE.md](CLAUDE.md).
